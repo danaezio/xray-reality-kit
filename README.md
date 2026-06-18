@@ -1,111 +1,256 @@
 # Xray Reality Kit
 
-One-command installer for a private Xray VPN server:
+Готовый установщик для быстрого разворачивания личного VPN на Ubuntu VPS.
 
+Что ставится:
+
+- Xray
 - VLESS
 - REALITY
 - XHTTP transport
-- Cloudflare SNI target by default
-- BBR speed tuning
-- minimal GUI for creating/deleting client keys
+- BBR-настройки скорости
+- UFW firewall
+- минимальная веб-панель для создания и удаления ключей
 
-The GUI edits only the `clients` list in `/usr/local/etc/xray/config.json`, validates the config, backs it up, and restarts Xray.
+По умолчанию используется рабочая связка:
 
-## Quick Install On New Ubuntu VPS
-
-Copy this repository to the VPS, then run:
-
-```bash
-sudo bash scripts/install.sh --host YOUR_VPS_IP
+```text
+VLESS + REALITY + XHTTP
+Port: 443
+SNI/target: www.cloudflare.com
+XHTTP path: /xray-cloud
+GUI panel: 8765
 ```
 
-Or with a domain:
+## Быстрый старт на новом VPS
+
+Подключись к серверу:
 
 ```bash
-sudo bash scripts/install.sh --host vpn.example.com
+ssh root@IP_ТВОЕГО_VPS
 ```
 
-At the end, the script prints:
-
-- VLESS import link
-- panel token
-- panel URL
-
-## If Xray Is Already Installed
-
-The installer will stop if `/usr/local/etc/xray/config.json` already exists.
-
-To replace it after creating a backup:
+Установи Git:
 
 ```bash
-sudo bash scripts/install.sh --host YOUR_VPS_IP --force
+apt update
+apt install -y git
 ```
 
-## Public GUI Access
-
-By default, the GUI listens on `127.0.0.1:8765`.
-
-Open it from your computer with:
+Склонируй репозиторий:
 
 ```bash
-ssh -L 8765:127.0.0.1:8765 root@YOUR_VPS_IP
+git clone git@github.com:danaezio/xray-reality-kit.git
+cd xray-reality-kit
 ```
 
-Then open:
+Если на VPS еще не настроен SSH-доступ к GitHub, используй HTTPS:
+
+```bash
+git clone https://github.com/danaezio/xray-reality-kit.git
+cd xray-reality-kit
+```
+
+Запусти установку:
+
+```bash
+bash scripts/install.sh --host IP_ТВОЕГО_VPS --panel-public
+```
+
+Пример:
+
+```bash
+bash scripts/install.sh --host 123.123.123.123 --panel-public
+```
+
+В конце установщик покажет:
+
+- готовую VLESS-ссылку для импорта в клиент
+- токен от панели
+- адрес панели
+
+## Вход в панель
+
+Если установка была с `--panel-public`, открой в браузере:
+
+```text
+http://IP_ТВОЕГО_VPS:8765
+```
+
+Токен можно посмотреть на сервере:
+
+```bash
+grep PANEL_TOKEN /etc/xray-key-panel.env
+```
+
+В панели можно:
+
+- создавать новые ключи
+- удалять ключи
+- копировать VLESS-ссылки
+- перезапускать Xray
+
+## Более безопасный вход в панель
+
+Публичный режим `--panel-public` удобный, но панель открыта в интернет на отдельном порту. Она защищена токеном, но это все равно обычный HTTP.
+
+Более безопасный вариант: ставить без `--panel-public`.
+
+```bash
+bash scripts/install.sh --host IP_ТВОЕГО_VPS
+```
+
+Потом открывать панель через SSH-туннель:
+
+```bash
+ssh -L 8765:127.0.0.1:8765 root@IP_ТВОЕГО_VPS
+```
+
+И открыть на своем компьютере:
 
 ```text
 http://127.0.0.1:8765
 ```
 
-For direct access over the internet:
+## Если Xray уже установлен
 
-```bash
-sudo bash scripts/install.sh --host YOUR_VPS_IP --panel-public
-```
-
-Then open:
+Если на сервере уже есть файл:
 
 ```text
-http://YOUR_VPS_IP:8765
+/usr/local/etc/xray/config.json
 ```
 
-Direct mode is plain HTTP. Use a strong token and do not share the URL.
+установщик остановится, чтобы случайно ничего не перезаписать.
 
-## Useful Commands
+Чтобы заменить существующий конфиг, используй `--force`:
+
+```bash
+bash scripts/install.sh --host IP_ТВОЕГО_VPS --panel-public --force
+```
+
+Старый конфиг будет сохранен рядом с именем вида:
+
+```text
+/usr/local/etc/xray/config.json.backup-YYYYMMDD-HHMMSS
+```
+
+## Установка с доменом
+
+Если у тебя есть домен или поддомен, направь `A`-запись на IP сервера, затем запусти:
+
+```bash
+bash scripts/install.sh --host vpn.example.com --panel-public
+```
+
+В VLESS-ссылках будет использоваться домен вместо IP.
+
+## Полезные команды
+
+Проверить Xray:
 
 ```bash
 systemctl status xray --no-pager
+```
+
+Проверить панель:
+
+```bash
 systemctl status xray-key-panel --no-pager
+```
+
+Посмотреть логи Xray:
+
+```bash
 journalctl -u xray -n 80 --no-pager
+```
+
+Посмотреть логи панели:
+
+```bash
 journalctl -u xray-key-panel -n 80 --no-pager
+```
+
+Перезапустить Xray:
+
+```bash
+systemctl restart xray
+```
+
+Перезапустить панель:
+
+```bash
+systemctl restart xray-key-panel
+```
+
+Посмотреть токен панели:
+
+```bash
 grep PANEL_TOKEN /etc/xray-key-panel.env
 ```
 
-## Defaults
+## Обновить репозиторий на VPS
+
+В папке проекта:
+
+```bash
+git pull
+```
+
+Если нужно обновить только веб-панель без изменения VPN-конфига:
+
+```bash
+bash scripts/install-panel.sh
+systemctl restart xray-key-panel
+```
+
+## Параметры установщика
 
 ```text
-Port: 443
-Transport: xhttp
-XHTTP path: /xray-cloud
-SNI target: www.cloudflare.com
-Panel: 127.0.0.1:8765
+--host VALUE      IP или домен VPS для VLESS-ссылок
+--sni VALUE       REALITY target/SNI, по умолчанию www.cloudflare.com
+--path VALUE      XHTTP path, по умолчанию /xray-cloud
+--client VALUE    имя первого клиента, по умолчанию main
+--panel-public    открыть панель в интернет на порту 8765
+--force           заменить существующий Xray config после backup
 ```
 
-Override defaults:
+Пример с кастомным именем клиента:
 
 ```bash
-sudo bash scripts/install.sh \
-  --host YOUR_VPS_IP \
-  --sni www.cloudflare.com \
-  --path /xray-cloud \
-  --client iphone-main
+bash scripts/install.sh \
+  --host IP_ТВОЕГО_VPS \
+  --client iphone-main \
+  --panel-public
 ```
 
-## Updating Only The Panel
+## Что где лежит
 
-```bash
-sudo bash scripts/install-panel.sh
-sudo systemctl restart xray-key-panel
+```text
+/usr/local/etc/xray/config.json
 ```
 
-This does not modify the Xray config.
+Основной конфиг Xray.
+
+```text
+/usr/local/etc/xray/key-panel-settings.json
+```
+
+Настройки генерации ссылок для панели.
+
+```text
+/etc/xray-key-panel.env
+```
+
+Настройки панели и токен доступа.
+
+```text
+/opt/xray-key-panel/app.py
+```
+
+Файл веб-панели.
+
+## Важное замечание
+
+Не ставь обычный HTTPS reverse proxy на порт `443` без отдельной настройки маршрутизации, потому что порт `443` уже использует Xray Reality.
+
+Если нужна красивая HTTPS-панель на домене, лучше делать это отдельным шагом через SNI-routing или другой порт, чтобы не сломать VPN.
